@@ -1,0 +1,15 @@
+ZhengShu main() {
+    ZhengShu i;
+    ZhengShu s;
+    s = 0;
+    XunHuan (i = 0; i < 20; i = i + 1) {
+        RuGuo (i % 2 == 0) {
+            JiXu;
+        }
+        RuGuo (i > 10) {
+            TiaoChu;
+        }
+        s = s + i;
+    }
+    FanHui s;
+}

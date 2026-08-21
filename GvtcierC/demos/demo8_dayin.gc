@@ -1,0 +1,4 @@
+ZhengShu main() {
+    DaYin("Hello,Gvtcier!");
+    FanHui 0;
+}

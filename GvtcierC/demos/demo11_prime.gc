@@ -1,0 +1,64 @@
+ZiFu buf[32];
+
+ZhengShu itoa(ZhengShu n) {
+    ZhengShu i;
+    ZhengShu neg;
+    neg = 0;
+    RuGuo (n < 0) {
+        neg = 1;
+        n = 0 - n;
+    }
+    i = 0;
+    Dang (n > 0) {
+        buf[i] = n % 10 + 48;
+        n = n / 10;
+        i = i + 1;
+    }
+    RuGuo (i == 0) {
+        buf[i] = 48;
+        i = i + 1;
+    }
+    RuGuo (neg == 1) {
+        buf[i] = 45;
+        i = i + 1;
+    }
+    ZhengShu j;
+    ZhengShu k;
+    j = 0;
+    k = i - 1;
+    Dang (j < k) {
+        ZhengShu t;
+        t = buf[j];
+        buf[j] = buf[k];
+        buf[k] = t;
+        j = j + 1;
+        k = k - 1;
+    }
+    buf[i] = 0;
+    FanHui i;
+}
+
+ZhengShu is_prime(ZhengShu n) {
+    ZhengShu i;
+    RuGuo (n < 2) {
+        FanHui 0;
+    }
+    XunHuan (i = 2; i < n; i = i + 1) {
+        RuGuo (n % i == 0) {
+            FanHui 0;
+        }
+    }
+    FanHui 1;
+}
+
+ZhengShu main() {
+    ZhengShu n;
+    DaYin("20以内素数:");
+    XunHuan (n = 2; n <= 20; n = n + 1) {
+        RuGuo (is_prime(n)) {
+            itoa(n);
+            DaYin(buf);
+        }
+    }
+    FanHui 0;
+}

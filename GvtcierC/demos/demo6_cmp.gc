@@ -1,0 +1,8 @@
+ZhengShu main() {
+    FuDian f;
+    f = 3.5f;
+    RuGuo (f >= 3.0f && f < 4.0f) {
+        FanHui 1;
+    }
+    FanHui 0;
+}

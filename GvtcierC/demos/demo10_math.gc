@@ -1,0 +1,76 @@
+ZiFu buf[32];
+
+ZhengShu itoa(ZhengShu n) {
+    ZhengShu i;
+    ZhengShu neg;
+    neg = 0;
+    RuGuo (n < 0) {
+        neg = 1;
+        n = 0 - n;
+    }
+    i = 0;
+    Dang (n > 0) {
+        buf[i] = n % 10 + 48;
+        n = n / 10;
+        i = i + 1;
+    }
+    RuGuo (i == 0) {
+        buf[i] = 48;
+        i = i + 1;
+    }
+    RuGuo (neg == 1) {
+        buf[i] = 45;
+        i = i + 1;
+    }
+    ZhengShu j;
+    ZhengShu k;
+    j = 0;
+    k = i - 1;
+    Dang (j < k) {
+        ZhengShu t;
+        t = buf[j];
+        buf[j] = buf[k];
+        buf[k] = t;
+        j = j + 1;
+        k = k - 1;
+    }
+    buf[i] = 0;
+    FanHui i;
+}
+
+ZhengShu add(ZhengShu a, ZhengShu b) {
+    FanHui a + b;
+}
+
+ZhengShu power(ZhengShu b, ZhengShu e) {
+    ZhengShu r;
+    ZhengShu i;
+    r = 1;
+    XunHuan (i = 0; i < e; i = i + 1) {
+        r = r * b;
+    }
+    FanHui r;
+}
+
+ZhengShu sum1to(ZhengShu n) {
+    ZhengShu s;
+    ZhengShu i;
+    s = 0;
+    XunHuan (i = 1; i <= n; i = i + 1) {
+        s = s + i;
+    }
+    FanHui s;
+}
+
+ZhengShu main() {
+    DaYin("12+30=");
+    itoa(add(12, 30));
+    DaYin(buf);
+    DaYin(" 2^10=");
+    itoa(power(2, 10));
+    DaYin(buf);
+    DaYin(" 1..100=");
+    itoa(sum1to(100));
+    DaYin(buf);
+    FanHui 0;
+}

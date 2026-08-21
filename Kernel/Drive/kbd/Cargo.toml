@@ -1,0 +1,8 @@
+[package]
+name = "gvtcier-kbd-drv"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "gvtcier-kbd-drv"
+path = "src/main.rs"

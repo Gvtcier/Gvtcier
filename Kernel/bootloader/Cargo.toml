@@ -1,0 +1,8 @@
+[package]
+name = "gvtcier-bootloader"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+gvtcier-abi = { path = "../abi" }
+uefi = { version = "0.39", features = ["alloc", "global_allocator", "logger", "panic_handler"] }

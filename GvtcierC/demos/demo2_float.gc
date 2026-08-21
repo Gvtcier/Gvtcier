@@ -1,0 +1,7 @@
+ZhengShu main() {
+    FuDian f;
+    ShuangJing d;
+    f = 2.5f;
+    d = f * 2 + 1.0;
+    FanHui d;
+}

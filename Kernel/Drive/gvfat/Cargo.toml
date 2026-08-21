@@ -1,0 +1,8 @@
+[package]
+name = "gvtcier-gvfat"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "gvtcier_gvfat"
+path = "src/lib.rs"

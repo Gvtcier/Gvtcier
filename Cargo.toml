@@ -1,0 +1,9 @@
+[workspace]
+resolver = "2"
+members = ["Kernel/abi", "Kernel/bootloader", "Kernel/kernel", "iso", "Kernel/Drive/fat", "Kernel/Drive/kbd", "Kernel/Drive/mouse", "Kernel/Drive/gvfat", "Demo/draw"]
+
+[profile.dev]
+panic = "abort"
+
+[profile.release]
+panic = "abort"

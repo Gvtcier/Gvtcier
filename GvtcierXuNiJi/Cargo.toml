@@ -1,0 +1,11 @@
+[package]
+name = "gvtcierxuniji"
+version = "0.1.0"
+edition = "2021"
+description = "GvtcierXuNiJi —— Gvtcier最小虚拟机（AHCI 命令契约仿真器）"
+
+[workspace]
+
+[[bin]]
+name = "gvtcierxuniji"
+path = "src/main.rs"

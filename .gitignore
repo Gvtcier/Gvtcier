@@ -1,0 +1,15 @@
+target/
+out/
+.gvt/
+Gv2280/
+*.log
+*.obj
+*.o
+*.hcx
+*.exe
+*.iso
+*.fd
+*.img
+*.gcx
+__pycache__/
+*.py

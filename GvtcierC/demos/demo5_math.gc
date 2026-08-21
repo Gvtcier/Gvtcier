@@ -1,0 +1,19 @@
+ZhengShu sq(ZhengShu x) {
+    FanHui x * x;
+}
+
+ZhengShu max3(ZhengShu a, ZhengShu b, ZhengShu c) {
+    ZhengShu m;
+    m = a;
+    RuGuo (b > m) {
+        m = b;
+    }
+    RuGuo (c > m) {
+        m = c;
+    }
+    FanHui m;
+}
+
+ZhengShu main() {
+    FanHui sq(3) + max3(10, 20, 15);
+}

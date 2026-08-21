@@ -1,0 +1,8 @@
+[package]
+name = "gvtcier-draw-demo"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "gvtcier-draw-demo"
+path = "src/main.rs"

@@ -1,0 +1,8 @@
+ZiFu msg[16];
+
+ZhengShu main() {
+    msg[0] = 72;
+    msg[1] = 105;
+    msg[2] = 0;
+    FanHui msg[0] + msg[1];
+}

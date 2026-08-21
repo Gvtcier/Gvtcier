@@ -1,0 +1,8 @@
+[package]
+name = "gvtcier-mouse-drv"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "gvtcier-mouse-drv"
+path = "src/main.rs"

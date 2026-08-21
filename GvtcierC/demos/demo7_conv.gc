@@ -1,0 +1,5 @@
+ZhengShu main() {
+    ShuangJing d;
+    d = 7 / 2.0;
+    FanHui d;
+}

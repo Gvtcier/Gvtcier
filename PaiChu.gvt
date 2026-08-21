@@ -1,0 +1,7 @@
+out
+target
+Gvt
+.git
+kernel.gcx
+boot.bin
+stage2.bin

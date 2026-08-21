@@ -1,0 +1,50 @@
+ZiFu buf[32];
+
+ZhengShu itoa(ZhengShu n) {
+    ZhengShu i;
+    ZhengShu neg;
+    neg = 0;
+    RuGuo (n < 0) {
+        neg = 1;
+        n = 0 - n;
+    }
+    i = 0;
+    Dang (n > 0) {
+        buf[i] = n % 10 + 48;
+        n = n / 10;
+        i = i + 1;
+    }
+    RuGuo (i == 0) {
+        buf[i] = 48;
+        i = i + 1;
+    }
+    RuGuo (neg == 1) {
+        buf[i] = 45;
+        i = i + 1;
+    }
+    ZhengShu j;
+    ZhengShu k;
+    j = 0;
+    k = i - 1;
+    Dang (j < k) {
+        ZhengShu t;
+        t = buf[j];
+        buf[j] = buf[k];
+        buf[k] = t;
+        j = j + 1;
+        k = k - 1;
+    }
+    buf[i] = 0;
+    FanHui i;
+}
+
+ZhengShu main() {
+    DaYin("Hello, GvtcierC!");
+    itoa(12345);
+    DaYin(buf);
+    itoa(-678);
+    DaYin(buf);
+    itoa(7 * 6);
+    DaYin(buf);
+    FanHui 0;
+}

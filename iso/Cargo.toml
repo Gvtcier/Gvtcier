@@ -1,0 +1,22 @@
+[package]
+name = "gvtcier-iso"
+version = "0.2.0"
+edition = "2021"
+
+[[bin]]
+name = "gvtcier-iso"
+path = "src/main.rs"
+
+[[bin]]
+name = "gvtcier-mkdisk"
+path = "src/bin/MkDisk.rs"
+
+[[bin]]
+name = "gvtcier-gcx"
+path = "src/bin/gvtcier-gcx.rs"
+
+[[bin]]
+name = "gvtcier-gvfats"
+path = "src/bin/gvtcier-gvfats.rs"
+
+[dependencies]

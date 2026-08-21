@@ -1,0 +1,10 @@
+ZhengShu fib(ZhengShu n) {
+    RuGuo (n < 2) {
+        FanHui n;
+    }
+    FanHui fib(n - 1) + fib(n - 2);
+}
+
+ZhengShu main() {
+    FanHui fib(10);
+}
