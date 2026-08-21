@@ -2,6 +2,19 @@
 
 ABI（应用二进制接口）是 Gvtcier 引导层、内核与开发者之间的共享契约，位于 `Kernel/abi`。
 
+## 技术线：ABI 层在系统中的位置
+
+ABI 是编译期与运行期的双重契约：
+
+- **编译期**：`KERNEL_VIRT`、`BootInfo`、`MemoryRegion` 等常量与结构体被内核、引导层、用户程序共同引用,保证三端对地址空间与内存地图的理解一致
+- **运行期**：`Sys` 模块封装 1-40 号系统调用,作为用户态访问内核服务的唯一入口;`Gvtcier2D` 封装图形基础设施
+
+```
+引导层(填充 BootInfo)──▶ 内核入口(读取 BootInfo)──▶ 用户程序
+                              │
+                              └── Sys 封装 ──syscall──▶ 内核服务
+```
+
 ## 目录结构
 
 ```
@@ -17,6 +30,8 @@ Kernel/abi/
 
 - `KERNEL_VIRT`：内核高半区虚拟地址基址（`0xFFFF800000000000`）
 
+> **为什么高半区？** x86-64 虚拟地址空间被分为低半区（用户态，0x0000…）与高半区（内核态，0xFFFF…）。内核代码链接于 KERNEL_VIRT 起始的高半区,用户态程序无法访问该地址范围,天然隔离内核与用户空间;同时高半区为所有进程共享,用户进程页表只需映射一次内核页表即可访问内核（经系统调用）。
+
 ## 引导结构体
 
 | 结构体 | 字段 | 说明 |
@@ -24,6 +39,8 @@ Kernel/abi/
 | `BootInfo` | mem_map_addr / mem_map_len | 内存映射地址与长度 |
 | | fb_addr / fb_width / fb_height / fb_stride / fb_pixel_format | 帧缓冲信息 |
 | `MemoryRegion` | start / len / kind | 内存区域（kind：0=可用、1=保留） |
+
+> **BootInfo 从哪来？** 引导层（BIOS stage2 / UEFI bootloader）在进入内核前,通过 e820 中断（BIOS）或固件协议（UEFI）探测物理内存,将结果整理为 `MemoryRegion` 数组,连同帧缓冲信息一起以 `BootInfo` 结构传给内核入口。内核据此初始化 Buddy 分配器与帧缓冲,不重复探测。
 
 ## 使用教程
 

@@ -213,7 +213,7 @@ pub fn mount(base_lba: u64) -> u32 {
     }
     let mut sb = [0u8; 512];
     gdisk_read(0, 1, sb.as_mut_ptr() as u64);
-    if sb[0] != b'H' || sb[1] != b'W' || sb[2] != b'J' {
+    if &sb[0..3] != b"GvF" {
         return 1;
     }
     unsafe {
@@ -1261,7 +1261,7 @@ mod tests {
         unsafe {
             FILES = [FILE_NONE; MAX_FILES];
             TEST_DISK.fill(0);
-            TEST_DISK[0..3].copy_from_slice(b"HWJ");
+            TEST_DISK[0..3].copy_from_slice(b"GvF");
             TEST_DISK[4..8].copy_from_slice(&1u32.to_le_bytes());
             TEST_DISK[8..12].copy_from_slice(&512u32.to_le_bytes());
             TEST_DISK[12..20].copy_from_slice(&1u64.to_le_bytes());
@@ -1496,9 +1496,7 @@ mod tests {
         assert_eq!(gvfat_write(h, b"D0"), 2);
         gvfat_close(h);
         let mut sb1 = [0u8; 512];
-        sb1[0] = b'H';
-        sb1[1] = b'W';
-        sb1[2] = b'J';
+        sb1[0..3].copy_from_slice(b"GvF");
         sb1[12..20].copy_from_slice(&1u64.to_le_bytes());
         sb1[20..28].copy_from_slice(&2u64.to_le_bytes());
         sb1[28..36].copy_from_slice(&32u64.to_le_bytes());

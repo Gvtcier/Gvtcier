@@ -2,6 +2,20 @@
 
 `Sys` 模块封装了 Gvtcier 内核的系统调用，供开发者直接调用。位于 `Kernel/abi/src/Sys.rs`。
 
+## 技术线：一次系统调用的完整链路
+
+```
+用户程序 ──Sys::book(…)──▶ abi 封装(Sys.rs)
+  → syscall 指令(编号在 rax,参数 rdi/rsi/rdx/r10/r9/r8)
+  → 内核 syscall 入口(切换内核栈)──▶ rust_syscall_handler 按编号分发
+  → 具体服务(串口/文件/图形/内存/驱动)──▶ 结果写回 SYS_RET
+  → 返回用户态,abi 封装读取返回值
+```
+
+- **约定**:调用号放 `rax`,参数按 `rdi/rsi/rdx/r10/r9/r8`,返回写 `SYS_RET`(见 GVPIR.md)
+- **语义**:`Sys` 的函数名即拼音语义(book 写、yield_now 让出、plate_read 读盘等),与 GVPIR 编号一一对应
+- **安全**:编号在 1-40 范围内分发,越界编号被忽略;指针/长度参数由内核侧校验
+
 ## 引入
 
 ```rust

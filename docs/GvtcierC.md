@@ -2,6 +2,19 @@
 
 GvtcierC 是自制编程语言，位于 GvtcierC\ 目录。包含编译器 gvtcierc 与汇编器/链接器 gvtcierk，不依赖 gcc。
 
+## 技术线：编译链
+
+GvtcierC 采用**两段式编译链**,全程自持、不依赖 gcc:
+
+```
+demo.gc ──gvtcierc(前端)──▶ demo.s(x86-64 汇编)
+demo.s ──gvtcierk(汇编器+链接器)──▶ demo.exe(Windows PE)
+```
+
+- **gvtcierc(前端)**:词法/语法/语义分析,生成 x86-64 汇编
+- **gvtcierk(汇编器+链接器)**:汇编指令并链接,内嵌最小运行时(打印 DaYin 与文件读写),直接产出 PE 可执行文件
+- **关键字中文化**:类型/流程控制/函数均用拼音关键字(ZhengShu/RuGuo/Dang/FanHui…),自成体系
+
 ## 关键字
 
 | 关键字 | 含义 |

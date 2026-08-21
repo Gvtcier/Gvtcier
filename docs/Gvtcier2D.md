@@ -2,6 +2,22 @@
 
 Gvtcier2D 是 Gvtcier 的图形基础设施，位于 `Kernel/abi/src/Gvtcier2D.rs`，提供画布绘制 API（前缀 `g2d_`）。
 
+## 技术线：从绘制到显示
+
+Gvtcier2D 采用**软件帧缓冲 + 画布合成**模型,不依赖 GPU:
+
+```
+绘制 API(g2d_paint/box/stroke/glyph/curve…)
+  → 写入画布缓冲(内存中的像素数组)
+  → g2d_canvas_create/map 注册画布
+  → g2d_compose 将画布合成到屏幕帧缓冲(x, y 偏移)
+  → g2d_flush 刷新显示(复制到硬件帧缓冲)
+```
+
+- **像素格式**:ARGB8888,每个像素 4 字节(alpha、red、green、blue),颜色字面量如 `0x3498DBFF`
+- **画布模型**:画布是独立于屏幕的内存缓冲,可在离屏绘制后一次性合成,支持分层与局部刷新
+- **坐标体系**:所有 API 以左上角为原点,x 向右、y 向下,与屏幕帧缓冲一致
+
 ## 引入
 
 ```rust
@@ -71,9 +87,32 @@ Gvtcier2D::g2d_compose(canvas, 0, 0); // 合成到屏幕 (x, y)
 Gvtcier2D::g2d_flush();               // 刷新显示
 ```
 
+### 合成流程
+
+```
+g2d_canvas_create(width, height, buf)  声明画布(大小 + 指向用户提供的像素缓冲)
+g2d_canvas_map(canvas)                 注册画布到内核画布表(上限 16)
+g2d_compose(canvas, x, y)              将画布像素按偏移复制到屏幕帧缓冲
+g2d_flush()                            将帧缓冲整体刷新到显示硬件
+```
+
+- 画布创建时只登记元数据,实际像素存于用户缓冲,绘制 API 直接写该缓冲
+- `compose` 做像素复制(可含裁剪),`flush` 触发硬件级刷新
+
 ## 汉字字库
 
 Gvtcier2D 内置 GB2312 全部 6763 个常用汉字的 16x16 点阵字库（`Kernel/abi/data/font16.bin` + `unicode.bin`），`g2d_script` 直接支持 UTF-8 汉字文本。
+
+### 字库技术线
+
+```
+UTF-8 字节 → 解码为 Unicode 码点 → 映射到 GB2312 区位
+  → 查 font16.bin(16x16 点阵,每字 32 字节)
+  → 按位展开为像素,写入画布
+```
+
+- 英文字符走 8x8 内置点阵,汉字走 16x16 字库
+- `unicode.bin` 提供 Unicode→GB2312 的映射表,支持任意 UTF-8 输入文本
 
 ## 下一步
 
