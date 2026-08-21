@@ -733,6 +733,17 @@ unsafe fn csum_tcp_to(dst: &[u8], seg: &[u8]) -> u16 {
 }
 
 const MY_IP6: [u8; 16] = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1];
+static mut IPV6_GW: [u8; 16] = [0; 16];
+static mut IPV6_GW_VALID: bool = false;
+static mut IPV6_DAD_SENT: bool = false;
+
+pub fn ipv6_gw() -> [u8; 16] {
+    unsafe { IPV6_GW }
+}
+
+pub fn ipv6_gw_valid() -> bool {
+    unsafe { IPV6_GW_VALID }
+}
 
 unsafe fn ipv6_handle(pkt: &[u8]) {
     if pkt.len() < 40 {
@@ -773,6 +784,52 @@ unsafe fn ipv6_handle(pkt: &[u8]) {
             reply[2] = (c >> 8) as u8;
             reply[3] = c as u8;
             ipv6_send(src, &reply[..n]);
+        } else if icmp.len() >= 24 && icmp[0] == 135 {
+            let target = &icmp[8..24];
+            if target == MY_IP6 {
+                let mut na = [0u8; 24];
+                na[0] = 136;
+                na[1] = 0;
+                na[2] = 0;
+                na[3] = 0;
+                na[4] = 0x40;
+                na[8..24].copy_from_slice(&MY_IP6);
+                let mut sum: u32 = 0;
+                for b in &pkt[8..24] {
+                    sum += (*b as u32) << 8;
+                }
+                for b in &MY_IP6 {
+                    sum += *b as u32;
+                }
+                sum += 24u32 << 8;
+                sum += 58;
+                let mut i = 0;
+                while i + 1 < 24 {
+                    sum += ((na[i] as u32) << 8) | na[i + 1] as u32;
+                    i += 2;
+                }
+                while sum >> 16 != 0 {
+                    sum = (sum & 0xFFFF) + (sum >> 16);
+                }
+                let c = !(sum as u16);
+                na[2] = (c >> 8) as u8;
+                na[3] = c as u8;
+                let mut opt = [0u8; 8];
+                opt[0] = 2;
+                opt[1] = 1;
+                opt[2..8].copy_from_slice(&MAC);
+                let mut na_pkt = [0u8; 32];
+                na_pkt[..24].copy_from_slice(&na);
+                na_pkt[24..32].copy_from_slice(&opt);
+                ipv6_send(&pkt[8..24], &na_pkt);
+            }
+        } else if icmp.len() >= 16 && icmp[0] == 134 {
+            IPV6_GW.copy_from_slice(&pkt[8..24]);
+            IPV6_GW_VALID = true;
+            crate::println!(
+                "gvinter: ipv6 ra gw={:x}:{:x}",
+                pkt[8], pkt[9]
+            );
         }
     }
 }
@@ -805,6 +862,47 @@ pub fn wifi_disconnect() -> u32 {
 }
 
 static mut CAPR: u16 = 0;
+
+static mut RAW_OPEN: bool = false;
+static mut RAW_BUF: [u8; 2048] = [0; 2048];
+static mut RAW_LEN: usize = 0;
+
+pub fn raw_open() -> u32 {
+    unsafe {
+        if IO_BASE == 0 {
+            return 1;
+        }
+        RAW_OPEN = true;
+        RAW_LEN = 0;
+    }
+    0
+}
+
+pub fn raw_close() {
+    unsafe {
+        RAW_OPEN = false;
+        RAW_LEN = 0;
+    }
+}
+
+pub fn raw_send(data: &[u8]) -> u32 {
+    unsafe {
+        if IO_BASE == 0 || !LINK_UP || data.len() > 1500 {
+            return 1;
+        }
+        send_frame(data);
+    }
+    0
+}
+
+pub fn raw_recv(out: &mut [u8]) -> usize {
+    unsafe {
+        let n = core::cmp::min(RAW_LEN, out.len());
+        out[..n].copy_from_slice(&RAW_BUF[..n]);
+        RAW_LEN = 0;
+        n
+    }
+}
 
 pub fn poll() {
     unsafe {
@@ -842,6 +940,11 @@ pub fn poll() {
         if hdr & 0x8000 != 0 && len > 0 && len <= 1518 {
             let data = core::slice::from_raw_parts(RX_BUF_MEM.add(cap + 4), len);
             if len >= 14 {
+                if RAW_OPEN {
+                    let n = core::cmp::min(len, RAW_BUF.len());
+                    RAW_BUF[..n].copy_from_slice(&data[..n]);
+                    RAW_LEN = n;
+                }
                 let et = u16::from_be_bytes([data[12], data[13]]);
                 let payload = &data[14..];
                 crate::println!("gvinter: rx ethtype={:#06x} len={}", et, len);

@@ -20,6 +20,48 @@ pub fn set_cr3(phys: usize) {
     unsafe { core::arch::asm!("mov cr3, {0}", in(reg) phys as u64, options(nomem, nostack)) }
 }
 
+fn cpuid_leaf7() -> u32 {
+    let mut ebx = 0u32;
+    unsafe {
+        core::arch::asm!(
+            "mov eax, 7",
+            "xor ecx, ecx",
+            "cpuid",
+            "mov {0:e}, ebx",
+            out(reg) ebx,
+            out("eax") _,
+            out("ecx") _,
+            out("edx") _,
+            options(nostack)
+        );
+    }
+    ebx
+}
+
+pub fn smep_supported() -> bool {
+    cpuid_leaf7() & (1 << 7) != 0
+}
+
+pub fn smap_supported() -> bool {
+    cpuid_leaf7() & (1 << 20) != 0
+}
+
+pub fn enable_smep_smap() {
+    let mut cr4: u64;
+    unsafe {
+        core::arch::asm!("mov {0}, cr4", out(reg) cr4, options(nomem, nostack));
+    }
+    if smep_supported() {
+        cr4 |= 0x100000;
+        unsafe {
+            core::arch::asm!("mov cr4, {0}", in(reg) cr4, options(nomem, nostack));
+        }
+        println!("paging: smep enabled");
+    } else {
+        println!("paging: smep not supported by cpu");
+    }
+}
+
 pub fn map_page(cr3: usize, vaddr: usize, phys: usize, flags: u64) {
     if vaddr & 0xFFF != 0 || phys & 0xFFF != 0 {
         println!("paging: map unaligned vaddr={:#x} phys={:#x}", vaddr, phys);
@@ -169,7 +211,11 @@ pub fn cow_fault(cr3: usize, vaddr: usize) -> bool {
             None => return false,
         };
         let new_phys = mem::region_base() + page * 4096;
-        core::ptr::copy_nonoverlapping(old_phys as *const u8, new_phys as *mut u8, 4096);
+        core::ptr::copy_nonoverlapping(
+            virt(old_phys) as *const u8,
+            virt(new_phys) as *mut u8,
+            4096,
+        );
         pt.add(pt_idx)
             .write_volatile((new_phys as u64) | FLAG_USER | FLAG_WRITABLE | 1);
     }

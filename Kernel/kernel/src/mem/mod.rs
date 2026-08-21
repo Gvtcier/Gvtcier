@@ -92,12 +92,13 @@ static mut KASLR_OFFSET: u64 = 0;
 fn kaslr_seed() -> u64 {
     let (_, _, sec) = crate::Time::now();
     let tick = crate::intr::Apic::tick();
-    let tsc: u64;
+    let lo: u32;
+    let hi: u32;
     unsafe {
-        core::arch::asm!("rdtsc", out("eax") tsc as u32, out("edx") tsc as u32, options(nomem, nostack));
+        core::arch::asm!("rdtsc", out("eax") lo, out("edx") hi, options(nomem, nostack));
     }
-    let _ = tsc;
-    (sec as u64).wrapping_mul(0x9E3779B1) ^ tick.wrapping_mul(0x85EBCA6B) ^ 0x2A1171
+    let tsc = ((hi as u64) << 32) | lo as u64;
+    (sec as u64).wrapping_mul(0x9E3779B1) ^ tick.wrapping_mul(0x85EBCA6B) ^ tsc
 }
 
 pub fn kaslr_init() {

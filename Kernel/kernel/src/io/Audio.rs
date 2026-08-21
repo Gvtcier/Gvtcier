@@ -37,10 +37,37 @@ pub fn init() -> u32 {
             unsafe {
                 NABM = (bar & 0xFFFFFFF0) as u16;
             }
+            ac97_reset();
+            ac97_set_rate(48000);
+            ac97_set_master(0);
             return 0;
         }
     }
     1
+}
+
+fn ac97_write(reg: u8, v: u16) {
+    unsafe {
+        let n = NABM as usize;
+        if NABM == 0 {
+            return;
+        }
+        let addr = n + 0x80;
+        *(addr as *mut u16).add((reg / 2) as usize) = v;
+    }
+}
+
+fn ac97_reset() {
+    ac97_write(0x00, 0x0000);
+}
+
+fn ac97_set_rate(rate: u32) {
+    ac97_write(0x2C, rate as u16);
+}
+
+fn ac97_set_master(vol: u8) {
+    let v = (((vol & 0x1F) as u16) << 8) | (vol & 0x1F) as u16;
+    ac97_write(0x02, v);
 }
 
 pub fn nabm() -> u16 {
@@ -113,11 +140,14 @@ pub fn play_audio(data: &[u8]) -> u32 {
     1
 }
 
-pub fn play_pcm(ptr: *const u8, len: u32, _sample_rate: u32, _bits: u32, _channels: u32) -> u32 {
+pub fn play_pcm(ptr: *const u8, len: u32, sample_rate: u32, _bits: u32, _channels: u32) -> u32 {
     unsafe {
         let n = NABM as usize;
         if NABM == 0 || len == 0 {
             return 2;
+        }
+        if sample_rate > 0 {
+            ac97_set_rate(sample_rate);
         }
         static mut BD: [u32; 4] = [0; 4];
         BD[0] = (ptr as u64 - 0xFFFF800000000000) as u32;
@@ -129,6 +159,10 @@ pub fn play_pcm(ptr: *const u8, len: u32, _sample_rate: u32, _bits: u32, _channe
     0
 }
 
-pub fn play(_ptr: *const u8, _len: u32) -> u32 {
-    0
+pub fn play(ptr: *const u8, len: u32) -> u32 {
+    if ptr.is_null() || len == 0 {
+        return 2;
+    }
+    let data = unsafe { core::slice::from_raw_parts(ptr, len as usize) };
+    play_audio(data)
 }

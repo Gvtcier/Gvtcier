@@ -7,7 +7,7 @@ use crate::mem;
 use crate::mem::Paging;
 use crate::println;
 
-pub const MAX_TASKS: usize = 6;
+pub const MAX_TASKS: usize = 8;
 const TASK_KSTACK_SIZE: usize = 16384;
 const USER_STACK_BASE: usize = 0x7FFC000;
 const USER_STACK_TOP: usize = 0x8000000;
@@ -169,6 +169,73 @@ pub fn signal_poll() {
                 }
             }
         }
+    }
+}
+
+static mut PERF: [u64; MAX_TASKS] = [0; MAX_TASKS];
+
+pub fn perf_sample() {
+    unsafe {
+        if CURRENT < MAX_TASKS && TASKS[CURRENT].state != TaskState::Dead {
+            PERF[CURRENT] = PERF[CURRENT].wrapping_add(1);
+        }
+    }
+}
+
+pub fn perf_report(out: &mut [u8]) -> usize {
+    unsafe {
+        let mut o = 0usize;
+        for i in 0..MAX_TASKS {
+            if TASKS[i].state != TaskState::Dead {
+                let id = TASKS[i].id;
+                let n = PERF[i];
+                let mut tmp = [0u8; 12];
+                let mut ti = 0usize;
+                let mut v = n;
+                loop {
+                    tmp[ti] = b'0' + (v % 10) as u8;
+                    ti += 1;
+                    v /= 10;
+                    if v == 0 {
+                        break;
+                    }
+                }
+                while ti > 0 {
+                    ti -= 1;
+                    if o < out.len() {
+                        out[o] = tmp[ti];
+                        o += 1;
+                    }
+                }
+                if o < out.len() {
+                    out[o] = b' ';
+                    o += 1;
+                }
+                let mut d = id;
+                let mut td = [0u8; 12];
+                let mut ti2 = 0usize;
+                loop {
+                    td[ti2] = b'0' + (d % 10) as u8;
+                    ti2 += 1;
+                    d /= 10;
+                    if d == 0 {
+                        break;
+                    }
+                }
+                while ti2 > 0 {
+                    ti2 -= 1;
+                    if o < out.len() {
+                        out[o] = td[ti2];
+                        o += 1;
+                    }
+                }
+                if o < out.len() {
+                    out[o] = b'\n';
+                    o += 1;
+                }
+            }
+        }
+        o
     }
 }
 
@@ -391,6 +458,29 @@ pub fn shell_kill(tid: u32) {
     }
 }
 
+pub fn set_priority(pid: u32, prio: u32) -> u32 {
+    unsafe {
+        for i in 0..MAX_TASKS {
+            if TASKS[i].id == pid && TASKS[i].state != TaskState::Dead {
+                TASKS[i].priority = if prio > 255 { 255 } else { prio };
+                return 0;
+            }
+        }
+    }
+    1
+}
+
+pub fn priority_of(pid: u32) -> u32 {
+    unsafe {
+        for i in 0..MAX_TASKS {
+            if TASKS[i].id == pid && TASKS[i].state != TaskState::Dead {
+                return TASKS[i].priority;
+            }
+        }
+    }
+    0
+}
+
 pub fn schedule() {
     unsafe {
         let cur = CURRENT;
@@ -409,12 +499,21 @@ pub fn schedule() {
             }
         }
         if found {
-            CURRENT = best;
+            let selected = best;
+            if TASKS[selected].priority > 0 {
+                TASKS[selected].priority -= 1;
+            }
+            for i in 0..MAX_TASKS {
+                if i != selected && TASKS[i].state == TaskState::Blocked {
+                    TASKS[i].priority = TASKS[i].priority.saturating_add(1).min(255);
+                }
+            }
+            CURRENT = selected;
             SW_CUR = cur;
-            CUR_RSP0 = TASKS[best].kstack_top;
-            Gdt::set_tss_rsp0(TASKS[best].kstack_top);
-            Paging::set_cr3(TASKS[best].pml4);
-            asm_switch(&mut TASKS[SW_CUR].context, &TASKS[best].context);
+            CUR_RSP0 = TASKS[selected].kstack_top;
+            Gdt::set_tss_rsp0(TASKS[selected].kstack_top);
+            Paging::set_cr3(TASKS[selected].pml4);
+            asm_switch(&mut TASKS[SW_CUR].context, &TASKS[selected].context);
         }
     }
 }
@@ -474,6 +573,34 @@ fn task_entry() -> ! {
         Gdt::set_tss_rsp0(kstack_top);
         enter_user(entry, user_rsp, pml4);
     }
+}
+
+pub fn kthread_create(entry: usize) -> u32 {
+    unsafe {
+        for i in 0..MAX_TASKS {
+            if TASKS[i].state == TaskState::Dead {
+                let t = &mut TASKS[i];
+                t.id = NEXT_ID;
+                NEXT_ID += 1;
+                t.pid = 0xFFFFFFFF;
+                t.parent = 0;
+                t.state = TaskState::Ready;
+                t.priority = 0;
+                t.pml4 = crate::mem::Paging::cr3();
+                t.kstack_top =
+                    ((&TASK_STACKS[i] as *const u8 as usize) + TASK_KSTACK_SIZE) as u64;
+                t.entry = entry as u64;
+                t.user_rsp = 0;
+                t.blocked_on = -1;
+                t.pending_sig = 0;
+                t.context.rsp = t.kstack_top;
+                t.context.rip = entry as u64;
+                println!("kthread {} created: entry={:#x}", t.id, entry);
+                return t.id;
+            }
+        }
+    }
+    0xFFFFFFFF
 }
 
 fn load_elf(data: &[u8], pml4: usize) -> u64 {

@@ -164,6 +164,7 @@ extern "C" fn rust_irq_handler(frame: *const InterruptFrame) {
             }
             crate::Task::timer_poll();
             crate::Task::signal_poll();
+            crate::Task::perf_sample();
             if TICK.load(Ordering::Relaxed) % 50 == 0 {
                 println!(
                     "tick={} tsc_delta={}",

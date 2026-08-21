@@ -89,6 +89,69 @@ static mut TRACK: [u8; 4096] = [0; 4096];
 static mut CACHE_LBA: u64 = 0xFFFFFFFFFFFFFFFF;
 static mut CACHE_BUF: [u8; 512] = [0; 512];
 
+const EVENT_LOG_MAX: usize = 16;
+static mut EVENT_LOG: [(u8, [u8; NAME_LEN]); EVENT_LOG_MAX] = [(0, [0; NAME_LEN]); EVENT_LOG_MAX];
+static mut EVENT_HEAD: usize = 0;
+static mut EVENT_COUNT: usize = 0;
+
+fn event_log(kind: u8, name: &[u8]) {
+    unsafe {
+        let i = EVENT_HEAD % EVENT_LOG_MAX;
+        EVENT_LOG[i].0 = kind;
+        let mut n = [0u8; NAME_LEN];
+        let k = core::cmp::min(name.len(), NAME_LEN);
+        n[..k].copy_from_slice(&name[..k]);
+        EVENT_LOG[i].1 = n;
+        EVENT_HEAD += 1;
+        if EVENT_COUNT < EVENT_LOG_MAX {
+            EVENT_COUNT += 1;
+        }
+    }
+}
+
+pub fn event_count() -> usize {
+    unsafe { EVENT_COUNT }
+}
+
+pub fn event_dump(out: &mut [u8]) -> usize {
+    unsafe {
+        let mut o = 0usize;
+        let start = EVENT_HEAD.wrapping_sub(EVENT_COUNT);
+        for k in 0..EVENT_COUNT {
+            let i = (start + k) % EVENT_LOG_MAX;
+            let (kind, name) = (EVENT_LOG[i].0, EVENT_LOG[i].1);
+            let mark = match kind {
+                1 => b'C',
+                2 => b'W',
+                3 => b'D',
+                4 => b'T',
+                5 => b'R',
+                6 => b'L',
+                7 => b'M',
+                _ => b'?',
+            };
+            if o + 2 > out.len() {
+                break;
+            }
+            out[o] = mark;
+            out[o + 1] = b' ';
+            o += 2;
+            let mut nlen = 0usize;
+            while nlen < NAME_LEN && name[nlen] != 0 {
+                nlen += 1;
+            }
+            if o + nlen + 1 > out.len() {
+                break;
+            }
+            out[o..o + nlen].copy_from_slice(&name[..nlen]);
+            o += nlen;
+            out[o] = b'\n';
+            o += 1;
+        }
+        o
+    }
+}
+
 pub fn gvfat_set_time(min: u32) {
     unsafe {
         CLOCK_MIN = min;
@@ -109,6 +172,7 @@ pub struct File {
     pub blocks: u32,
     pub attr: u8,
     pub owner: u8,
+    pub locked: bool,
 }
 
 const FILE_NONE: File = File {
@@ -121,6 +185,7 @@ const FILE_NONE: File = File {
     blocks: 0,
     attr: 0,
     owner: 0,
+    locked: false,
 };
 
 static mut FILES: [File; MAX_FILES] = [FILE_NONE; MAX_FILES];
@@ -487,6 +552,7 @@ pub fn gvfat_open(path: &[u8]) -> u32 {
                         blocks,
                         attr,
                         owner,
+                        locked: false,
                     };
                     return i as u32;
                 }
@@ -505,6 +571,7 @@ pub fn gvfat_open(path: &[u8]) -> u32 {
     let name = parts[n - 1];
     write_entry(pdirstart, pdirblocks, lba, slot, name, 0, 0, 0, 0);
     stamp_entry(pdirstart, lba, slot);
+    event_log(1, name);
     unsafe {
         for i in 0..MAX_FILES {
             if !FILES[i].valid {
@@ -522,6 +589,7 @@ pub fn gvfat_open(path: &[u8]) -> u32 {
                     blocks: 0,
                     attr: 0,
                     owner: unsafe { CURRENT_UID as u8 },
+                    locked: false,
                 };
                 return i as u32;
             }
@@ -533,7 +601,7 @@ pub fn gvfat_open(path: &[u8]) -> u32 {
 pub fn gvfat_read(handle: u32, buf: &mut [u8]) -> u32 {
     unsafe {
         let f = &mut FILES[handle as usize];
-        if !f.valid || f.start_block == 0 {
+        if !f.valid || f.start_block == 0 || f.locked {
             return 0;
         }
         let mut total = 0;
@@ -571,7 +639,7 @@ pub fn gvfat_read(handle: u32, buf: &mut [u8]) -> u32 {
 pub fn gvfat_write(handle: u32, buf: &[u8]) -> u32 {
     unsafe {
         let f = &mut FILES[handle as usize];
-        if !f.valid || f.attr & ATTR_READONLY != 0 || !can_write(f.attr, f.owner) {
+        if !f.valid || f.attr & ATTR_READONLY != 0 || !can_write(f.attr, f.owner) || f.locked {
             return 0;
         }
         let need_blocks = ((f.pos as usize + buf.len()) + 511) / 512;
@@ -662,6 +730,7 @@ pub fn gvfat_mkdir(path: &[u8]) -> u32 {
     let name = parts[n - 1];
     write_entry(pdirstart, pdirblocks, lba, slot, name, start_block, 0, 1, ATTR_DIR);
     stamp_entry(pdirstart, lba, slot);
+    event_log(7, name);
     0
 }
 
@@ -710,6 +779,7 @@ pub fn gvfat_ln(link_path: &[u8], target: &[u8]) -> u32 {
         ATTR_LINK,
     );
     stamp_entry(pdirstart, lba, slot);
+    event_log(6, name);
     0
 }
 
@@ -719,6 +789,63 @@ fn read_link_target(start_block: u64, size: u64, out: &mut [u8]) -> usize {
     let n = core::cmp::min(size as usize, out.len());
     out[..n].copy_from_slice(&buf[..n]);
     n
+}
+
+pub fn gvfat_link(link_path: &[u8], target_path: &[u8]) -> u32 {
+    if link_path.is_empty()
+        || link_path.len() > MAX_PATH_LEN
+        || target_path.is_empty()
+        || target_path.len() > MAX_PATH_LEN
+    {
+        return 1;
+    }
+    let mut tparts = [&[][..]; MAX_PATH];
+    let tn = split_path(target_path, &mut tparts);
+    if tn == 0 {
+        return 1;
+    }
+    let (_, _, tstart, tsize, tblocks, tattr, _, _) =
+        match resolve_path(&tparts[..tn]) {
+            Some(x) => x,
+            None => return 1,
+        };
+    if tattr & ATTR_DIR != 0 || tattr & ATTR_LINK != 0 {
+        return 1;
+    }
+    if tstart == 0 {
+        return 1;
+    }
+    let mut lparts = [&[][..]; MAX_PATH];
+    let ln = split_path(link_path, &mut lparts);
+    if ln == 0 {
+        return 1;
+    }
+    if resolve_path(&lparts[..ln]).is_some() {
+        return 1;
+    }
+    let (pdirstart, pdirblocks) = match resolve_dir(&lparts[..ln], ln) {
+        Some(x) => x,
+        None => return 1,
+    };
+    let (lba, slot) = match find_slot(pdirstart, pdirblocks) {
+        Some(x) => x,
+        None => return 1,
+    };
+    let name = lparts[ln - 1];
+    write_entry(
+        pdirstart,
+        pdirblocks,
+        lba,
+        slot,
+        name,
+        tstart,
+        tsize,
+        tblocks,
+        tattr,
+    );
+    stamp_entry(pdirstart, lba, slot);
+    event_log(5, name);
+    0
 }
 
 fn resolve_path_with_links<'a>(parts: &[&'a [u8]]) -> Option<(u64, u64, u64, u64, u32, u8, u64, u32)> {
@@ -873,6 +1000,7 @@ pub fn gvfat_remove(path: &[u8]) -> u32 {
     read_dir_block(pdirstart, pdirblocks, s, &mut buf);
     buf[slot as usize * ENTRY_SIZE] = 0xE5;
     write_dir_block(pdirstart, pdirblocks, s, &buf);
+    event_log(3, parts[n - 1]);
     0
 }
 
@@ -882,6 +1010,29 @@ pub fn gvfat_close(handle: u32) {
             FILES[handle as usize] = FILE_NONE;
         }
     }
+}
+
+pub fn gvfat_lock(handle: u32) -> u32 {
+    unsafe {
+        if (handle as usize) >= MAX_FILES || !FILES[handle as usize].valid {
+            return 1;
+        }
+        if FILES[handle as usize].locked {
+            return 1;
+        }
+        FILES[handle as usize].locked = true;
+    }
+    0
+}
+
+pub fn gvfat_unlock(handle: u32) -> u32 {
+    unsafe {
+        if (handle as usize) >= MAX_FILES {
+            return 1;
+        }
+        FILES[handle as usize].locked = false;
+    }
+    0
 }
 
 pub fn gvfat_append(handle: u32, buf: &[u8]) -> u32 {
@@ -926,6 +1077,7 @@ pub fn gvfat_truncate(path: &[u8], new_size: u32) -> u32 {
     let name = parts[n - 1];
     write_entry(pdirstart, pdirblocks, lba, slot, name, start, new_size as u64, new_blocks, attr);
     touch_entry(pdirstart, lba, slot);
+    event_log(4, name);
     0
 }
 
